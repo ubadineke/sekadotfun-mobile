@@ -135,6 +135,7 @@ export function useAuthorization() {
 
   const authorizeSession = useCallback(
     async (wallet: AuthorizeAPI) => {
+      console.log('Authorizing session with token:', fetchQuery.data?.authToken ? 'Present' : 'Missing')
       const authorizationResult = await wallet.authorize({
         identity,
         chain: selectedCluster.id,

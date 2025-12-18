@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   Animated,
   Dimensions,
@@ -9,11 +10,21 @@ import {
   Text,
   TouchableOpacity,
   View,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
+
+import { SuccessModal } from "@/components/success-modal";
+import { formatSol } from "@/utils/format";
+import { useAccountBalance } from "@/hooks/use-account-balance";
+import { apiService } from "@/services/api";
+import { useAuthorization } from "@/components/solana/use-authorization";
+import { useCluster } from "@/components/cluster/cluster-provider";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 export default function ProfilePage() {
+  const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -22,34 +33,81 @@ export default function ProfilePage() {
   const circle2 = useRef(new Animated.Value(0)).current;
   const circle3 = useRef(new Animated.Value(0)).current;
 
-  // Mock user data
-  const userProfile = {
-    username: "crypto_prophet.skr",
-    displayName: "Crypto Prophet",
-    balance: 1247,
-    totalWagered: 15420,
-    winRate: 68.5,
-    totalBets: 47,
-    wins: 32,
-    losses: 15,
-    level: "Sage",
-    joinedDate: "March 2025",
-    isGenesis: true,
+  // Data state
+  const { formattedBalance } = useAccountBalance();
+  const { selectedAccount } = useAuthorization();
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [stats, setStats] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'wagers' | 'created'>('wagers');
+  const [userWagers, setUserWagers] = useState<any[]>([]);
+  const [createdBets, setCreatedBets] = useState<any[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editSeekerId, setEditSeekerId] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+
+  useEffect(() => {
+    fetchUserData();
+  }, [selectedAccount]);
+
+  const fetchUserData = async () => {
+    if (!selectedAccount) return;
+
+    try {
+      // 1. Get User ID from Wallet Address
+      const walletAddress = selectedAccount.publicKey.toBase58();
+      const user = await apiService.getUserByWallet(walletAddress);
+
+      if (!user) {
+        console.error("User not found for wallet:", walletAddress);
+        return;
+      }
+
+      // 2. Fetch Stats & Wagers with real ID
+      const [statsData, wagersData, createdData] = await Promise.all([
+        apiService.getUserStats(user.id),
+        apiService.getUserWagers(),
+        apiService.getCreatedBets()
+      ]);
+
+      setUserProfile({
+        username: user.seekerId || `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}.skr`,
+        displayName: user.name || "Anon Seeker",
+        balance: formattedBalance,
+        totalWagered: statsData.totalWageredAmount,
+        totalBets: statsData.totalBetsCreated,
+        wins: 0, // Not yet tracked
+        losses: 0, // Not yet tracked
+        level: "Seeker", // Placeholder
+        joinedDate: new Date(statsData.memberSince).toLocaleDateString(),
+        isGenesis: false, // Placeholder
+      });
+
+      setUserWagers(wagersData);
+      setCreatedBets(createdData);
+
+      setStats([
+        { label: "Win Rate", value: "N/A", color: "#22C55E" },
+        { label: "Total Bets", value: statsData.totalBetsCreated, color: "#4ECDC4" },
+        { label: "Wagered", value: `${formatSol(statsData.totalWageredAmount)} SKR`, color: "#8B5CF6" },
+        { label: "Level", value: "Seeker", color: "#F59E0B" },
+      ]);
+
+    } catch (e) {
+      console.error("Failed to fetch user profile", e);
+    }
   };
 
-  const stats = [
-    { label: "Win Rate", value: `${userProfile.winRate}%`, color: "#22C55E" },
-    { label: "Total Bets", value: userProfile.totalBets, color: "#4ECDC4" },
-    { label: "Wagered", value: `${userProfile.totalWagered} SKR`, color: "#8B5CF6" },
-    { label: "Level", value: userProfile.level, color: "#F59E0B" },
-  ];
+
 
   const menuItems = [
     {
       title: "Your Wagers",
       subtitle: "View all your active and past bets",
       icon: "🎯",
-      badge: "12 Active",
+      badge: userWagers.filter(w => w.bet?.status === 'active').length > 0 ? `${userWagers.filter(w => w.bet?.status === 'active').length} Active` : undefined,
+      badgeColor: "#22C55E",
     },
     {
       title: "Create Bets",
@@ -239,7 +297,14 @@ export default function ProfilePage() {
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity style={styles.editButton}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => {
+              setEditName(userProfile?.displayName || "");
+              setEditSeekerId(userProfile?.username || "");
+              setIsEditing(true);
+            }}
+          >
             <Text style={styles.editButtonText}>✏️</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -270,9 +335,9 @@ export default function ProfilePage() {
                     colors={["#FF6B6B", "#4ECDC4", "#45B7D1"]}
                     style={styles.avatar}
                   >
-                    <Text style={styles.avatarText}>CP</Text>
+                    <Text style={styles.avatarText}>👤</Text>
                   </LinearGradient>
-                  {userProfile.isGenesis && (
+                  {userProfile?.isGenesis && (
                     <View style={styles.genesisIndicator}>
                       <Text style={styles.genesisText}>⭐</Text>
                     </View>
@@ -280,18 +345,79 @@ export default function ProfilePage() {
                 </View>
 
                 <View style={styles.profileInfo}>
-                  <Text style={styles.displayName}>{userProfile.displayName}</Text>
-                  <Text style={styles.username}>{userProfile.username}</Text>
+                  <Text style={styles.displayName}>{userProfile?.displayName || "Loading..."}</Text>
+                  <Text style={styles.username}>{userProfile?.username || "..."}</Text>
                   <Text style={styles.joinedDate}>
-                    Member since {userProfile.joinedDate}
+                    Member since {userProfile?.joinedDate || '...'}
                   </Text>
                 </View>
               </View>
 
+              {/* Edit Form */}
+              {isEditing && (
+                <View style={styles.editForm}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                    <Text style={[styles.sectionTitle, { fontSize: 18, marginBottom: 0 }]}>Edit Profile</Text>
+                    <TouchableOpacity onPress={() => setIsEditing(false)} style={{ padding: 5 }}>
+                      <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 20 }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.editLabel}>Display Name</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    placeholder={userProfile?.displayName}
+                    placeholderTextColor="#666"
+                    value={editName}
+                    onChangeText={setEditName}
+                  />
+                  <Text style={styles.editLabel}>Seeker ID</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    placeholder={userProfile?.username}
+                    placeholderTextColor="#666"
+                    value={editSeekerId}
+                    onChangeText={setEditSeekerId}
+                  />
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={async () => {
+                      if (isSaving) return;
+                      setIsSaving(true);
+                      try {
+                        if (!selectedAccount) return;
+                        // Resolve user ID again (or we could store it in state)
+                        const user = await apiService.getUserByWallet(selectedAccount.publicKey.toBase58());
+                        if (!user) return;
+
+                        await apiService.updateProfile(user.id, {
+                          name: editName,
+                          seekerId: editSeekerId
+                        });
+                        fetchUserData();
+                        setIsEditing(false);
+                      } catch (e) {
+                        // @ts-ignore
+                        console.log("Full Error", e.response?.data?.message)
+                        console.error("Failed to update profile", e);
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Save Changes</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Balance */}
               <View style={styles.balanceSection}>
                 <Text style={styles.balanceLabel}>Current Balance</Text>
-                <Text style={styles.balanceAmount}>{userProfile.balance} SKR</Text>
+                <Text style={styles.balanceAmount}>{formattedBalance} SKR</Text>
               </View>
             </LinearGradient>
           </Animated.View>
@@ -308,7 +434,7 @@ export default function ProfilePage() {
           >
             <Text style={styles.sectionTitle}>Your Performance</Text>
             <View style={styles.statsGrid}>
-              {stats.map((stat, index) => (
+              {stats && stats.map((stat, index) => (
                 <View key={index} style={styles.statCard}>
                   <LinearGradient
                     colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
@@ -324,7 +450,9 @@ export default function ProfilePage() {
             </View>
           </Animated.View>
 
-          {/* Menu Items */}
+
+
+          {/* Menu Section */}
           <Animated.View
             style={[
               styles.menuSection,
@@ -334,9 +462,49 @@ export default function ProfilePage() {
               },
             ]}
           >
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
             {menuItems.map((item, index) => (
-              <MenuItem key={index} item={item} index={index} />
+              <View key={index} style={styles.menuItemContainer}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (item.title === "Your Wagers") {
+                      router.push("/wagers");
+                    } else if (item.title === "Create Bets") {
+                      router.push("/create");
+                    } else {
+                      // Navigate to other pages as implemented
+                      console.log(`Navigating to ${item.title}`);
+                    }
+                  }}
+                >
+                  <LinearGradient
+                    colors={
+                      item.color
+                        ? [item.color, `${item.color}80`]
+                        : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]
+                    }
+                    style={styles.menuItemGradient}
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <View style={styles.menuIcon}>
+                        <Text style={styles.menuIconText}>{item.icon}</Text>
+                      </View>
+                      <View style={styles.menuContent}>
+                        <View style={styles.menuTitleRow}>
+                          <Text style={styles.menuTitle}>{item.title}</Text>
+                          {item.badge && (
+                            <View style={[styles.badge, item.badgeColor ? { backgroundColor: item.badgeColor } : {}]}>
+                              <Text style={styles.badgeText}>{item.badge}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.menuArrow}>›</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             ))}
           </Animated.View>
 
@@ -375,7 +543,7 @@ export default function ProfilePage() {
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </LinearGradient >
   );
 }
 
@@ -684,4 +852,89 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
   },
+
+
+  // Tabs
+  tabsContainer: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
+    marginBottom: 16,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  tabText: {
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  tabTextActive: {
+    color: "#FFFFFF",
+  },
+  listContainer: {
+    marginBottom: 20
+  },
+  listItem: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8
+  },
+  listItemTitle: {
+    color: '#FFF',
+    fontWeight: 'bold'
+  },
+  listItemSubtitle: {
+    color: '#CCC',
+  },
+  emptyText: {
+    color: '#999',
+    textAlign: 'center',
+    marginVertical: 20
+  },
+  createBetButton: {
+    backgroundColor: '#667eea',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center'
+  },
+  createBetButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold'
+  },
+  editForm: {
+    marginVertical: 10,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    padding: 10,
+    borderRadius: 10
+  },
+  editLabel: {
+    color: '#CCC',
+    marginBottom: 5
+  },
+  editInput: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    color: '#FFF',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10
+  },
+  saveButton: {
+    backgroundColor: '#22C55E',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
+  saveButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold'
+  }
 });

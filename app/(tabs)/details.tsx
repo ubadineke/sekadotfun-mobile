@@ -1,7 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  Animated,
+  Alert,
   Dimensions,
   SafeAreaView,
   ScrollView,
@@ -10,7 +11,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Animated,
 } from "react-native";
+import { usePlaceWager } from "@/hooks/use-place-wager";
+import { apiService } from "@/services/api";
+import { SuccessModal } from "@/components/success-modal";
+import { formatSol } from "@/utils/format";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -21,58 +27,83 @@ export default function tapIn() {
   const [wagerAmount, setWagerAmount] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Background animation
   const circle1 = useRef(new Animated.Value(0)).current;
   const circle2 = useRef(new Animated.Value(0)).current;
 
   // Mock bet data
-  const betDetails = {
-    id: 1,
-    description: "Will BTC hit $100k by end of December 2025?",
-    yesStake: 2450,
-    noStake: 1850,
-    totalStake: 4300,
-    yesPercentage: 57,
-    noPercentage: 43,
-    endTime: Date.now() + 5 * 24 * 60 * 60 * 1000, // 5 days from now
-    createdDate: Date.now() - 3 * 24 * 60 * 60 * 1000, // 3 days ago
-    creator: "alice.skr",
-    status: "active",
-    decisionType: "voting", // or "creator"
-  };
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const { placeWager, isLoading } = usePlaceWager();
 
-  // Mock activity data
-  const [wagers] = useState([
-    {
+  // Parse bet data from params, fallback to mock if missing
+  const [betDetails, setBetDetails] = useState<any>(() => {
+    if (params.bet) {
+      try {
+        return JSON.parse(params.bet as string);
+      } catch (e) {
+        console.error("Failed to parse bet param", e);
+      }
+    }
+    return {
       id: 1,
-      user: "bob.skr",
-      side: "yes",
-      amount: 150,
-      timestamp: Date.now() - 2 * 60 * 60 * 1000,
-    },
-    {
-      id: 2,
-      user: "charlie.skr",
-      side: "no",
-      amount: 75,
-      timestamp: Date.now() - 4 * 60 * 60 * 1000,
-    },
-    {
-      id: 3,
-      user: "diana.skr",
-      side: "yes",
-      amount: 300,
-      timestamp: Date.now() - 1 * 24 * 60 * 60 * 1000,
-    },
-    {
-      id: 4,
-      user: "eve.skr",
-      side: "no",
-      amount: 225,
-      timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000,
-    },
-  ]);
+      description: "Will BTC hit $100k by end of December 2025?",
+      yesStake: 2450,
+      noStake: 1850,
+      totalStake: 4300,
+      yesPercentage: 57,
+      noPercentage: 43,
+      endTime: Date.now() + 5 * 24 * 60 * 60 * 1000, // 5 days from now
+      createdDate: Date.now() - 3 * 24 * 60 * 60 * 1000,
+      creator: "alice.skr",
+      status: "active",
+      decisionType: "voting",
+    };
+  });
+
+  // Update state if params change (e.g. deep link)
+  useEffect(() => {
+    if (params.bet) {
+      try {
+        setBetDetails(JSON.parse(params.bet as string));
+      } catch (e) { }
+    }
+  }, [params.bet]);
+
+
+
+  // Real activity data
+  const [wagers, setWagers] = useState<any[]>([]);
+
+  const [isFetchingWagers, setIsFetchingWagers] = useState(false);
+
+  useEffect(() => {
+    if (betDetails?.id) {
+      loadWagers();
+    }
+  }, [betDetails?.id]);
+
+  const loadWagers = async () => {
+    if (isFetchingWagers) return;
+    try {
+      setIsFetchingWagers(true);
+      const votes = await apiService.getBetVotes(betDetails.id);
+      const formattedWagers = votes.map((vote: any) => ({
+        id: vote.id,
+        user: vote.user.name || "no-name.skr",
+        side: vote.choice ? "yes" : "no",
+        amount: vote.amount,
+        timestamp: new Date(vote.votedAt).getTime(),
+      }));
+      setWagers(formattedWagers);
+    } catch (e) {
+      console.error("Failed to load wagers", e);
+    } finally {
+      setIsFetchingWagers(false);
+    }
+  };
 
   const [votes] = useState([
     {
@@ -197,6 +228,43 @@ export default function tapIn() {
     );
   };
 
+  const handlePlaceWager = async () => {
+    if (!wagerAmount || isNaN(Number(wagerAmount))) {
+      Alert.alert("Invalid Amount", "Please enter a valid amount");
+      return;
+    }
+
+    // Check if wallet is connected? Hook handles it but good to check UI state if needed.
+
+    try {
+      const lamports = Math.floor(parseFloat(wagerAmount) * 1_000_000_000); // 1 SOL = 1e9 lamports
+      console.log('Placing wager:', {
+        pda: betDetails.pda,
+        id: betDetails.id,
+        side: selectedSide,
+        amount: lamports
+      });
+
+      await placeWager({
+        betPda: betDetails.pda,
+        betIdBackend: betDetails.id,
+        side: selectedSide as 'yes' | 'no',
+        amount: lamports
+      });
+
+      setShowSuccessModal(true);
+      setWagerAmount("");
+      loadWagers();
+    } catch (e) {
+      // Error is handled in hook (logged/set state), but we catch here for UI Alert if hook throws.
+      // Hook throws error, so we catch it.
+      // Alert is already shown? No, hook sets error state. But we can Alert here too.
+      // Actually hook throws 'err', so we Alert here.
+      // But hook uses error state? 
+      // Let's use Alert.
+    }
+  };
+
   const ActivityItem = ({ item, type }) => (
     <View style={styles.activityItem}>
       <View style={styles.activityHeader}>
@@ -214,7 +282,7 @@ export default function tapIn() {
             >
               <Text style={styles.sideText}>{item.side.toUpperCase()}</Text>
             </View>
-            <Text style={styles.activityAmount}>{item.amount} SKR</Text>
+            <Text style={styles.activityAmount}>{formatSol(item.amount)} SKR</Text>
           </>
         ) : (
           <>
@@ -256,7 +324,7 @@ export default function tapIn() {
             },
           ]}
         >
-          <TouchableOpacity style={styles.backButton}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Bet Details</Text>
@@ -310,7 +378,7 @@ export default function tapIn() {
                   <View style={styles.stakeDetail}>
                     <Text style={styles.stakeLabel}>Total Stake</Text>
                     <Text style={styles.totalStakeAmount}>
-                      {betDetails.totalStake} SKR
+                      {formatSol(betDetails.totalStake)} SKR
                     </Text>
                   </View>
                 </View>
@@ -321,7 +389,7 @@ export default function tapIn() {
                 <View style={styles.metaItem}>
                   <Text style={styles.metaLabel}>Created</Text>
                   <Text style={styles.metaValue}>
-                    {formatDate(betDetails.createdDate)}
+                    {formatDate(betDetails.createdAt || Date.now())}
                   </Text>
                 </View>
                 <View style={styles.metaItem}>
@@ -417,17 +485,23 @@ export default function tapIn() {
                     onChangeText={setWagerAmount}
                     keyboardType="numeric"
                   />
-                  <Text style={styles.currencyLabel}>SKR</Text>
+                  <Text style={styles.currencyLabel}>SOL</Text>
                 </View>
               </View>
 
               {/* Place Wager Button */}
-              <TouchableOpacity style={styles.placeWagerButton}>
+              <TouchableOpacity
+                style={styles.placeWagerButton}
+                onPress={handlePlaceWager}
+                disabled={isLoading}
+              >
                 <LinearGradient
-                  colors={["#667eea", "#764ba2"]}
+                  colors={isLoading ? ["#4B5563", "#374151"] : ["#667eea", "#764ba2"]}
                   style={styles.placeWagerGradient}
                 >
-                  <Text style={styles.placeWagerText}>Place Wager</Text>
+                  <Text style={styles.placeWagerText}>
+                    {isLoading ? "Processing..." : "Place Wager"}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </LinearGradient>
@@ -449,12 +523,16 @@ export default function tapIn() {
             <View style={styles.tabsContainer}>
               <TouchableOpacity
                 style={[styles.tab, activeTab === "wagers" && styles.tabActive]}
-                onPress={() => setActiveTab("wagers")}
+                onPress={() => {
+                  setActiveTab("wagers");
+                  loadWagers();
+                }}
+                disabled={isFetchingWagers}
               >
                 <Text
                   style={[styles.tabText, activeTab === "wagers" && styles.tabTextActive]}
                 >
-                  Wagers
+                  {isFetchingWagers ? "Refreshing..." : "Wagers"}
                 </Text>
               </TouchableOpacity>
 
@@ -474,15 +552,22 @@ export default function tapIn() {
             <View style={styles.activityList}>
               {activeTab === "wagers"
                 ? wagers.map((item) => (
-                    <ActivityItem key={item.id} item={item} type="wagers" />
-                  ))
+                  <ActivityItem key={item.id} item={item} type="wagers" />
+                ))
                 : votes.map((item) => (
-                    <ActivityItem key={item.id} item={item} type="votes" />
-                  ))}
+                  <ActivityItem key={item.id} item={item} type="votes" />
+                ))}
             </View>
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
+
+      <SuccessModal
+        visible={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Wager Placed!"
+        message={`You successfully placed a wager on ${selectedSide.toUpperCase()}.`}
+      />
     </LinearGradient>
   );
 }
@@ -686,6 +771,11 @@ const styles = StyleSheet.create({
   },
   sideButtonTextActive: {
     color: "#FFFFFF",
+  },
+  sideButtonActive: {
+    borderColor: "#4ECDC4",
+    borderWidth: 2,
+    transform: [{ scale: 1.05 }],
   },
 
   // Amount Input

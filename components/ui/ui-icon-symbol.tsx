@@ -14,8 +14,10 @@ export type UiIconSymbolName = keyof typeof MAPPING
  */
 const MAPPING = {
   'gearshape.fill': 'settings',
-  'wallet.pass.fill': 'wallet',
+  'wallet.pass.fill': 'account-balance-wallet',
   'ladybug.fill': 'bug-report',
+  'house.fill': 'home',
+  'person.fill': 'person',
 } as UiIconMapping
 
 /**

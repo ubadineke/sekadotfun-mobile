@@ -1,11 +1,19 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import { Link } from 'expo-router'
-import React, { useEffect, useRef, useState } from 'react'
-import { Animated, Dimensions, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Link, useRouter, useFocusEffect } from 'expo-router'
+import MaterialIcons from '@expo/vector-icons/MaterialIcons'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { Animated, Dimensions, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, RefreshControl } from 'react-native'
+import { apiService } from '@/services/api'
+import { ellipsify } from '@/utils/ellipsify'
+import { formatSol } from '@/utils/format'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 
+import { useAccountBalance } from '@/hooks/use-account-balance'
+
 export default function HomePage() {
+  const router = useRouter()
+  const { formattedBalance } = useAccountBalance()
   const [currentTime, setCurrentTime] = useState(Date.now())
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(30)).current
@@ -15,7 +23,62 @@ export default function HomePage() {
   const circle2 = useRef(new Animated.Value(0)).current
   const circle3 = useRef(new Animated.Value(0)).current
 
-  // Mock bet data
+  // State for bets
+  const [bets, setBets] = useState<any[]>([])
+  const [refreshing, setRefreshing] = useState(false)
+
+  const fetchBets = async () => {
+    try {
+      const data = await apiService.getBets()
+      // Transform backend data to UI format
+      const transformed = data.map((bet: any) => {
+        const totalVotes = (bet.yesCount || 0) + (bet.noCount || 0)
+        const yesPct = totalVotes > 0 ? Math.round(((bet.yesCount || 0) / totalVotes) * 100) : 50
+        const noPct = totalVotes > 0 ? Math.round(((bet.noCount || 0) / totalVotes) * 100) : 50
+        const now = Date.now()
+        const endTime = new Date(bet.endsAt).getTime()
+
+        return {
+          ...bet, // Keep original data first
+          id: bet.id,
+          description: bet.description,
+          yesStake: 0, // volume breakdown not yet available
+          noStake: 0,
+          totalStake: bet.volume || 0,
+          yesPercentage: yesPct,
+          noPercentage: noPct,
+          endTime: endTime,
+          creator: bet.creator?.walletAddress ? ellipsify(bet.creator.walletAddress) : 'Unknown',
+          status: endTime < now ? 'closed' : 'active',
+        }
+      })
+
+      const sorted = transformed.sort((a: any, b: any) => {
+        if (a.status === 'active' && b.status !== 'active') return -1
+        if (a.status !== 'active' && b.status === 'active') return 1
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      })
+
+      setBets(sorted)
+    } catch (error) {
+      console.error('Failed to fetch bets:', error)
+    }
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchBets()
+    }, [])
+  )
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true)
+    await fetchBets()
+    setRefreshing(false)
+  }, [])
+
+  // Mock bet data (Legacy)
+  /*
   const [bets] = useState([
     {
       id: 1,
@@ -29,43 +92,9 @@ export default function HomePage() {
       creator: 'alice.skr',
       status: 'active',
     },
-    {
-      id: 2,
-      description: "Lakers will win tonight's game vs Warriors?",
-      yesStake: 890,
-      noStake: 1240,
-      totalStake: 2130,
-      yesPercentage: 42,
-      noPercentage: 58,
-      endTime: Date.now() + 6 * 60 * 60 * 1000, // 6 hours from now
-      creator: 'sports_king.skr',
-      status: 'active',
-    },
-    {
-      id: 3,
-      description: 'Will it rain in Lagos tomorrow?',
-      yesStake: 340,
-      noStake: 180,
-      totalStake: 520,
-      yesPercentage: 65,
-      noPercentage: 35,
-      endTime: Date.now() - 1000, // Past time (closed)
-      creator: 'weather_wizard.skr',
-      status: 'closed',
-    },
-    {
-      id: 4,
-      description: 'SOL token will reach $300 this week?',
-      yesStake: 1200,
-      noStake: 800,
-      totalStake: 2000,
-      yesPercentage: 60,
-      noPercentage: 40,
-      endTime: Date.now() + 2 * 24 * 60 * 60 * 1000, // 2 days from now
-      creator: 'crypto_prophet.skr',
-      status: 'active',
-    },
+    ...
   ])
+  */
 
   useEffect(() => {
     // Main content animation
@@ -105,12 +134,11 @@ export default function HomePage() {
     animateCircle(circle2, 2000, 12000)
     animateCircle(circle3, 4000, 8000)
 
-    // Timer update
+    // Timer update - uncomment if you need live countdown
     // const timer = setInterval(() => {
     //   setCurrentTime(Date.now());
     // }, 1000);
-
-    return () => clearInterval(timer)
+    // return () => clearInterval(timer)
   }, [])
 
   const formatTimeLeft = (endTime) => {
@@ -183,70 +211,77 @@ export default function HomePage() {
           },
         ]}
       >
-        <LinearGradient
-          colors={isClosed ? ['#374151', '#1F2937'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
-          style={styles.betCardGradient}
+        <TouchableOpacity
+          activeOpacity={0.95}
+          onPress={() => router.push({ pathname: '/(tabs)/details', params: { bet: JSON.stringify(bet) } })}
         >
-          {/* Header */}
-          <View style={styles.betHeader}>
-            <Text style={[styles.betDescription, isClosed && styles.closedText]}>{bet.description}</Text>
-            <View style={[styles.timerContainer, isClosed && styles.closedTimer]}>
-              <Text style={[styles.timerText, isClosed && styles.closedTimerText]}>
-                {isClosed ? 'CLOSED' : timeLeft}
-              </Text>
-            </View>
-          </View>
-
-          {/* Progress Bar */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressLabels}>
-              <Text style={styles.progressLabel}>YES {bet.yesPercentage}%</Text>
-              <Text style={styles.totalStakeText}>{bet.totalStake} SKR</Text>
-              <Text style={styles.progressLabel}>NO {bet.noPercentage}%</Text>
+          <LinearGradient
+            colors={isClosed ? ['#374151', '#1F2937'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+            style={styles.betCardGradient}
+          >
+            {/* Header */}
+            <View style={styles.betHeader}>
+              <Text style={[styles.betDescription, isClosed && styles.closedText]}>{bet.description}</Text>
+              <View style={[styles.timerContainer, isClosed && styles.closedTimer]}>
+                <Text style={[styles.timerText, isClosed && styles.closedTimerText]}>
+                  {isClosed ? 'CLOSED' : timeLeft}
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: `${bet.yesPercentage}%` }]} />
+            {/* Progress Bar */}
+            <View style={styles.progressSection}>
+              <View style={styles.progressLabels}>
+                <Text style={styles.progressLabel}>YES {bet.yesPercentage}%</Text>
+                <Text style={styles.totalStakeText}>{formatSol(bet.totalStake)} SKR</Text>
+                <Text style={styles.progressLabel}>NO {bet.noPercentage}%</Text>
+              </View>
+
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBar, { width: `${bet.yesPercentage}%` }]} />
+              </View>
+
+              <View style={styles.stakeLabels}>
+                <Text style={styles.stakeAmount}>{formatSol(bet.yesStake)} SKR</Text>
+                <Text style={styles.stakeAmount}>{formatSol(bet.noStake)} SKR</Text>
+              </View>
             </View>
 
-            <View style={styles.stakeLabels}>
-              <Text style={styles.stakeAmount}>{bet.yesStake} SKR</Text>
-              <Text style={styles.stakeAmount}>{bet.noStake} SKR</Text>
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.actionSection}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.yesButton, isClosed && styles.disabledButton]}
-              disabled={isClosed}
-            >
-              <LinearGradient
-                colors={isClosed ? ['#6B7280', '#4B5563'] : ['#22C55E', '#16A34A']}
-                style={styles.actionButtonGradient}
+            {/* Action Buttons */}
+            <View style={styles.actionSection}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.yesButton, isClosed && styles.disabledButton]}
+                disabled={isClosed}
+                onPress={() => router.push({ pathname: '/(tabs)/details', params: { bet: JSON.stringify(bet) } })}
               >
-                <Text style={styles.actionButtonText}>YES</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={isClosed ? ['#6B7280', '#4B5563'] : ['#22C55E', '#16A34A']}
+                  style={styles.actionButtonGradient}
+                >
+                  <Text style={styles.actionButtonText}>YES</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, styles.noButton, isClosed && styles.disabledButton]}
-              disabled={isClosed}
-            >
-              <LinearGradient
-                colors={isClosed ? ['#6B7280', '#4B5563'] : ['#EF4444', '#DC2626']}
-                style={styles.actionButtonGradient}
+              <TouchableOpacity
+                style={[styles.actionButton, styles.noButton, isClosed && styles.disabledButton]}
+                disabled={isClosed}
+                onPress={() => router.push({ pathname: '/(tabs)/details', params: { bet: JSON.stringify(bet) } })}
               >
-                <Text style={styles.actionButtonText}>NO</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+                <LinearGradient
+                  colors={isClosed ? ['#6B7280', '#4B5563'] : ['#EF4444', '#DC2626']}
+                  style={styles.actionButtonGradient}
+                >
+                  <Text style={styles.actionButtonText}>NO</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
 
-          {/* Creator */}
-          <View style={styles.creatorSection}>
-            <Text style={styles.creatorText}>Created by {bet.creator}</Text>
-          </View>
-        </LinearGradient>
+            {/* Creator */}
+            <View style={styles.creatorSection}>
+              <Text style={styles.creatorText}>Created by {bet.creator}</Text>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
       </Animated.View>
     )
   }
@@ -286,7 +321,7 @@ export default function HomePage() {
           <View style={styles.headerActions}>
             <View style={styles.balanceContainer}>
               <Text style={styles.balanceLabel}>Balance</Text>
-              <Text style={styles.balanceAmount}>1,247 SKR</Text>
+              <Text style={styles.balanceAmount}>{formattedBalance} SKR</Text>
             </View>
             <TouchableOpacity style={styles.notificationButton}>
               <Text style={styles.notificationIcon}>🔔</Text>
@@ -328,7 +363,16 @@ export default function HomePage() {
           ]}
         >
           <View style={styles.feedHeader}>
-            <Text style={styles.feedTitle}>Active Predictions</Text>
+            <View style={styles.feedTitleRow}>
+              <Text style={styles.feedTitle}>Active Predictions</Text>
+              <TouchableOpacity onPress={onRefresh} disabled={refreshing}>
+                <MaterialIcons
+                  name="refresh"
+                  size={24}
+                  color={refreshing ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.8)"}
+                />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.feedSubtitle}>Tap YES or NO to place your bet</Text>
           </View>
 
@@ -343,7 +387,7 @@ export default function HomePage() {
           </ScrollView>
         </Animated.View>
       </SafeAreaView>
-    </LinearGradient>
+    </LinearGradient >
   )
 }
 
@@ -474,6 +518,12 @@ const styles = StyleSheet.create({
   },
   feedHeader: {
     marginBottom: 16,
+  },
+  feedTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   feedTitle: {
     color: '#FFFFFF',
@@ -614,4 +664,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
   },
+  yesButton: {},
+  noButton: {},
 })

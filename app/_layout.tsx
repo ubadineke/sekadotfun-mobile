@@ -1,5 +1,16 @@
+import 'react-native-get-random-values'
+import 'react-native-url-polyfill/auto'
+import { Buffer } from 'buffer'
+global.Buffer = Buffer // Force overwrite to ensure full functionality
+console.log('Buffer polyfill installed. readUIntLE support:', typeof global.Buffer.prototype.readUIntLE)
+
 import { PortalHost } from '@rn-primitives/portal'
 import { useFonts } from 'expo-font'
+
+if (!global.structuredClone) {
+  global.structuredClone = (val) => JSON.parse(JSON.stringify(val))
+}
+
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import 'react-native-reanimated'
@@ -59,6 +70,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={isAuthenticated}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="create" options={{ presentation: 'modal' }} />
         <Stack.Screen name="+not-found" />
       </Stack.Protected>
       <Stack.Protected guard={!isAuthenticated}>

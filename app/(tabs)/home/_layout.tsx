@@ -4,7 +4,7 @@ import { Stack } from 'expo-router'
 export default function HomeLayout() {
   return (
     <Stack screenOptions={{ headerTitle: 'Demo', headerRight: () => <WalletUiDropdown /> }}>
-      <Stack.Screen name="home" />
+      <Stack.Screen name="index" />
     </Stack>
   )
 }

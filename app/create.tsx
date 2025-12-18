@@ -2,9 +2,11 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import React, { useEffect, useRef, useState } from 'react'
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useCreateBet } from '@/hooks/use-create-bet'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 
@@ -25,6 +28,16 @@ export default function CreateBetPage() {
   const [isPublic, setIsPublic] = useState(true)
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
+
+  // Date/Time picker modal state
+  const [showDateModal, setShowDateModal] = useState(false)
+  const [showTimeModal, setShowTimeModal] = useState(false)
+  const [tempDate, setTempDate] = useState({ year: '', month: '', day: '' })
+  const [tempTime, setTempTime] = useState({ hour: '', minute: '' })
+
+  // Success Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successSignature, setSuccessSignature] = useState('')
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -113,7 +126,45 @@ export default function CreateBetPage() {
     )
   }
 
-  const handleCreateBet = () => {
+  // Date/Time picker handlers
+  const showDatePicker = () => {
+    const now = new Date()
+    setTempDate({
+      year: now.getFullYear().toString(),
+      month: (now.getMonth() + 1).toString().padStart(2, '0'),
+      day: now.getDate().toString().padStart(2, '0'),
+    })
+    setShowDateModal(true)
+  }
+
+  const showTimePicker = () => {
+    const now = new Date()
+    setTempTime({
+      hour: now.getHours().toString().padStart(2, '0'),
+      minute: now.getMinutes().toString().padStart(2, '0'),
+    })
+    setShowTimeModal(true)
+  }
+
+  const confirmDate = () => {
+    const { year, month, day } = tempDate
+    if (year && month && day) {
+      setSelectedDate(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`)
+    }
+    setShowDateModal(false)
+  }
+
+  const confirmTime = () => {
+    const { hour, minute } = tempTime
+    if (hour && minute) {
+      setSelectedTime(`${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`)
+    }
+    setShowTimeModal(false)
+  }
+
+  const { createBet, isLoading: isCreatingBet } = useCreateBet()
+
+  const handleCreateBet = async () => {
     if (!betName.trim()) {
       Alert.alert('Missing Info', 'Please enter a bet name/description')
       return
@@ -123,10 +174,34 @@ export default function CreateBetPage() {
       return
     }
 
-    // Here you would normally submit the bet data
-    Alert.alert('Bet Created! 🎉', `"${betName}" has been created successfully!`, [
-      { text: 'OK', onPress: () => router.back() },
-    ])
+    try {
+      // Parse the selected date and time into a Date object
+      // Expected format: selectedDate = "2024-12-25", selectedTime = "14:30"
+      const endsAt = new Date(`${selectedDate}T${selectedTime}:00`)
+
+      if (isNaN(endsAt.getTime())) {
+        Alert.alert('Invalid Date', 'Please select a valid date and time')
+        return
+      }
+
+      if (endsAt <= new Date()) {
+        Alert.alert('Invalid Date', 'End time must be in the future')
+        return
+      }
+
+      const result = await createBet({
+        description: betName,
+        decisionMethod: winnerMethod === 'voting' ? 'voting' : 'creatorDecides',
+        type: isPublic ? 'public' : 'private',
+        endsAt,
+      })
+
+      setSuccessSignature(result.signature)
+      setShowSuccessModal(true)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create bet'
+      Alert.alert('Error', message)
+    }
   }
 
   return (
@@ -289,52 +364,220 @@ export default function CreateBetPage() {
                 <Text style={styles.emoji}>⏰</Text> Deadline
               </Text>
               <View style={styles.deadlineContainer}>
-                <TouchableOpacity style={styles.dateTimeButton}>
+                <TouchableOpacity style={styles.dateTimeButton} onPress={showDatePicker}>
                   <LinearGradient
-                    colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)']}
+                    colors={selectedDate ? ['rgba(78,205,196,0.2)', 'rgba(78,205,196,0.3)'] : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)']}
                     style={styles.dateTimeGradient}
                   >
                     <Text style={styles.dateTimeIcon}>📅</Text>
                     <View style={styles.dateTimeInfo}>
                       <Text style={styles.dateTimeLabel}>Date</Text>
-                      <Text style={styles.dateTimeValue}>{selectedDate || 'Select Date'}</Text>
+                      <Text style={[styles.dateTimeValue, selectedDate && styles.dateTimeValueSelected]}>
+                        {selectedDate || 'Select Date'}
+                      </Text>
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.dateTimeButton}>
+                <TouchableOpacity style={styles.dateTimeButton} onPress={showTimePicker}>
                   <LinearGradient
-                    colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)']}
+                    colors={selectedTime ? ['rgba(78,205,196,0.2)', 'rgba(78,205,196,0.3)'] : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)']}
                     style={styles.dateTimeGradient}
                   >
                     <Text style={styles.dateTimeIcon}>🕐</Text>
                     <View style={styles.dateTimeInfo}>
                       <Text style={styles.dateTimeLabel}>Time</Text>
-                      <Text style={styles.dateTimeValue}>{selectedTime || 'Select Time'}</Text>
+                      <Text style={[styles.dateTimeValue, selectedTime && styles.dateTimeValueSelected]}>
+                        {selectedTime || 'Select Time'}
+                      </Text>
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
+
+              {/* Date Picker Modal */}
+              <Modal
+                visible={showDateModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowDateModal(false)}
+              >
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>📅 Select Date</Text>
+                    <View style={styles.dateInputRow}>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateInputLabel}>Year</Text>
+                        <TextInput
+                          style={styles.dateInput}
+                          placeholder="YYYY"
+                          placeholderTextColor="rgba(255,255,255,0.4)"
+                          keyboardType="number-pad"
+                          maxLength={4}
+                          value={tempDate.year}
+                          onChangeText={(text) => setTempDate(prev => ({ ...prev, year: text }))}
+                        />
+                      </View>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateInputLabel}>Month</Text>
+                        <TextInput
+                          style={styles.dateInput}
+                          placeholder="MM"
+                          placeholderTextColor="rgba(255,255,255,0.4)"
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          value={tempDate.month}
+                          onChangeText={(text) => setTempDate(prev => ({ ...prev, month: text }))}
+                        />
+                      </View>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateInputLabel}>Day</Text>
+                        <TextInput
+                          style={styles.dateInput}
+                          placeholder="DD"
+                          placeholderTextColor="rgba(255,255,255,0.4)"
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          value={tempDate.day}
+                          onChangeText={(text) => setTempDate(prev => ({ ...prev, day: text }))}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.modalButtons}>
+                      <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDateModal(false)}>
+                        <Text style={styles.modalCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmDate}>
+                        <LinearGradient colors={['#667eea', '#764ba2']} style={styles.modalConfirmGradient}>
+                          <Text style={styles.modalConfirmText}>Confirm</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
+
+              {/* Time Picker Modal */}
+              <Modal
+                visible={showTimeModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowTimeModal(false)}
+              >
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>🕐 Select Time</Text>
+                    <View style={styles.dateInputRow}>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateInputLabel}>Hour (0-23)</Text>
+                        <TextInput
+                          style={styles.dateInput}
+                          placeholder="HH"
+                          placeholderTextColor="rgba(255,255,255,0.4)"
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          value={tempTime.hour}
+                          onChangeText={(text) => setTempTime(prev => ({ ...prev, hour: text }))}
+                        />
+                      </View>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateInputLabel}>Minute</Text>
+                        <TextInput
+                          style={styles.dateInput}
+                          placeholder="MM"
+                          placeholderTextColor="rgba(255,255,255,0.4)"
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          value={tempTime.minute}
+                          onChangeText={(text) => setTempTime(prev => ({ ...prev, minute: text }))}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.modalButtons}>
+                      <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowTimeModal(false)}>
+                        <Text style={styles.modalCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmTime}>
+                        <LinearGradient colors={['#667eea', '#764ba2']} style={styles.modalConfirmGradient}>
+                          <Text style={styles.modalConfirmText}>Confirm</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
             </View>
 
             {/* Create Bet Button */}
             <View style={styles.createButtonContainer}>
-              <TouchableOpacity style={styles.createButton} onPress={handleCreateBet}>
+              <TouchableOpacity
+                style={[styles.createButton, isCreatingBet && styles.createButtonDisabled]}
+                onPress={handleCreateBet}
+                disabled={isCreatingBet}
+              >
                 <LinearGradient
-                  colors={['#667eea', '#764ba2']}
+                  colors={isCreatingBet ? ['#555', '#666'] : ['#667eea', '#764ba2']}
                   style={styles.createButtonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Text style={styles.createButtonText}>Create Bet</Text>
-                  <Text style={styles.createButtonIcon}>🚀</Text>
+                  {isCreatingBet ? (
+                    <>
+                      <ActivityIndicator color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={styles.createButtonText}>Creating...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.createButtonText}>Create Bet</Text>
+                      <Text style={styles.createButtonIcon}>🚀</Text>
+                    </>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
             </View>
+            {/* Success Modal */}
+            <Modal
+              visible={showSuccessModal}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => router.back()}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                  <Text style={styles.successEmoji}>🎉</Text>
+                  <Text style={styles.modalTitle}>Bet Created!</Text>
+                  <Text style={styles.successDescription}>"{betName}" is now live on the blockchain.</Text>
+
+                  <View style={styles.txContainer}>
+                    <Text style={styles.txLabel}>Transaction Hash</Text>
+                    <Text style={styles.txHash} numberOfLines={1} ellipsizeMode="middle">
+                      {successSignature}
+                    </Text>
+                  </View>
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={styles.modalCancelBtn}
+                      onPress={() => Alert.alert('Share', 'Sharing functionality coming soon!')}
+                    >
+                      <Text style={styles.modalCancelText}>🔗 Share</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.modalConfirmBtn} onPress={() => router.back()}>
+                      <LinearGradient colors={['#667eea', '#764ba2']} style={styles.modalConfirmGradient}>
+                        <Text style={styles.modalConfirmText}>Done</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+
+
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </LinearGradient >
   )
 }
 
@@ -562,6 +805,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
+  dateTimeValueSelected: {
+    color: '#4ECDC4',
+  },
 
   // Create Button
   createButtonContainer: {
@@ -576,6 +822,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
+  },
+  createButtonDisabled: {
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   createButtonGradient: {
     paddingVertical: 18,
@@ -592,5 +843,119 @@ const styles = StyleSheet.create({
   },
   createButtonIcon: {
     fontSize: 18,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1F1F3D',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 24,
+  },
+  dateInputContainer: {
+    flex: 1,
+  },
+  dateInputLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  dateInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalConfirmGradient: {
+    padding: 14,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Success Modal Specifics
+  successEmoji: {
+    fontSize: 60,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  successDescription: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  txContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  txLabel: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  txHash: {
+    color: '#4ECDC4',
+    fontSize: 14,
+    fontFamily: 'monospace',
   },
 })

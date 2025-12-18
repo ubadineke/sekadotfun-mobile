@@ -1,0 +1,764 @@
+{
+  "address": "4YmcnLt2J7ziAXpMF7AyNKNkuuiMoQ8bshyhkn6TrNvP",
+  "metadata": {
+    "name": "sekadotfun_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "apply_bet",
+      "discriminator": [
+        112,
+        31,
+        125,
+        9,
+        34,
+        57,
+        128,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "bet_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vote",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "bet_id"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true
+        },
+        {
+          "name": "user_token",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bet_id",
+          "type": "u64"
+        },
+        {
+          "name": "side",
+          "type": "bool"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_reward",
+      "discriminator": [
+        149,
+        95,
+        181,
+        242,
+        94,
+        90,
+        158,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "bet",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "bet_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vote",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "bet_id"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true
+        },
+        {
+          "name": "user_token",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "bet_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_bet",
+      "discriminator": [
+        197,
+        42,
+        153,
+        2,
+        59,
+        63,
+        143,
+        246
+      ],
+      "accounts": [
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "bet_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "bet"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "skr_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "skr_mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": [
+        {
+          "name": "bet_id",
+          "type": "u64"
+        },
+        {
+          "name": "end_time",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "finish_bet",
+      "discriminator": [
+        95,
+        154,
+        96,
+        115,
+        122,
+        212,
+        41,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "bet_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        }
+      ],
+      "args": [
+        {
+          "name": "bet_id",
+          "type": "u64"
+        },
+        {
+          "name": "outcome",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize_config",
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Bet",
+      "discriminator": [
+        147,
+        23,
+        35,
+        59,
+        15,
+        75,
+        155,
+        32
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Vote",
+      "discriminator": [
+        96,
+        91,
+        104,
+        57,
+        145,
+        35,
+        172,
+        155
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BetCreated",
+      "discriminator": [
+        32,
+        153,
+        105,
+        71,
+        188,
+        72,
+        107,
+        114
+      ]
+    },
+    {
+      "name": "BetPlaced",
+      "discriminator": [
+        88,
+        88,
+        145,
+        226,
+        126,
+        206,
+        32,
+        0
+      ]
+    },
+    {
+      "name": "BetResolved",
+      "discriminator": [
+        133,
+        89,
+        89,
+        125,
+        4,
+        219,
+        82,
+        137
+      ]
+    },
+    {
+      "name": "RewardClaimed",
+      "discriminator": [
+        49,
+        28,
+        87,
+        84,
+        158,
+        48,
+        229,
+        175
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAmount",
+      "msg": "Invalid bet amount"
+    },
+    {
+      "code": 6001,
+      "name": "AlreadyResolved",
+      "msg": "Bet is already resolved"
+    },
+    {
+      "code": 6002,
+      "name": "BetClosed",
+      "msg": "Bet is still open"
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Unauthorized to resolve bet"
+    },
+    {
+      "code": 6004,
+      "name": "NotResolved",
+      "msg": "Bet not resolved yet"
+    },
+    {
+      "code": 6005,
+      "name": "NotWinner",
+      "msg": "User is not a winner"
+    },
+    {
+      "code": 6006,
+      "name": "NoWinners",
+      "msg": "No winners for this outcome"
+    },
+    {
+      "code": 6007,
+      "name": "MathOverflow",
+      "msg": "Math overflow in payout calculation"
+    },
+    {
+      "code": 6008,
+      "name": "BetStillOpen",
+      "msg": "Bet not closed yet"
+    }
+  ],
+  "types": [
+    {
+      "name": "Bet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "bet_id",
+            "type": "u64"
+          },
+          {
+            "name": "total_yes",
+            "type": "u64"
+          },
+          {
+            "name": "total_no",
+            "type": "u64"
+          },
+          {
+            "name": "outcome",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "end_time",
+            "type": "i64"
+          },
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BetCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bet_id",
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "end_time",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BetPlaced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bet_id",
+            "type": "u64"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "bool"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BetResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bet_id",
+            "type": "u64"
+          },
+          {
+            "name": "outcome",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "skr_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bet_id",
+            "type": "u64"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vote",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "bet_id",
+            "type": "u64"
+          },
+          {
+            "name": "side",
+            "type": "bool"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
